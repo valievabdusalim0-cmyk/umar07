@@ -1,0 +1,690 @@
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Drift X</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #080808;
+    font-family: Arial, sans-serif;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background: #171717;
+}
+
+.hud {
+    position: fixed;
+    top: 18px;
+    left: 18px;
+    z-index: 5;
+    color: white;
+    pointer-events: none;
+}
+
+.title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #ff3333;
+    text-shadow: 0 0 15px #ff0000;
+}
+
+.stats {
+    margin-top: 8px;
+    background: rgba(0,0,0,.55);
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.15);
+    backdrop-filter: blur(8px);
+}
+
+.stats div {
+    margin: 3px 0;
+}
+
+#score {
+    color: #00ff88;
+    font-weight: bold;
+}
+
+#speed {
+    color: #00c8ff;
+    font-weight: bold;
+}
+
+#combo {
+    color: #ffcc00;
+    font-weight: bold;
+}
+
+.help {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 5;
+    color: #aaa;
+    background: rgba(0,0,0,.5);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.mobile {
+    position: fixed;
+    bottom: 25px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 25px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.pad {
+    display: flex;
+    gap: 12px;
+}
+
+.btn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.25);
+    background: rgba(0,0,0,.55);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-weight: bold;
+    pointer-events: auto;
+    touch-action: none;
+    box-shadow: 0 5px 20px rgba(0,0,0,.5);
+}
+
+.btn:active {
+    background: rgba(255,50,50,.7);
+    transform: scale(.94);
+}
+
+.gas {
+    background: rgba(0,180,255,.25);
+}
+
+.brake {
+    background: rgba(255,50,50,.25);
+}
+
+@media (min-width: 800px) {
+    .mobile {
+        opacity: .35;
+    }
+
+    .mobile:hover {
+        opacity: 1;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div class="hud">
+    <div class="title">DRIFT X</div>
+
+    <div class="stats">
+        <div>🏆 Очки: <span id="score">0</span></div>
+        <div>🚗 Скорость: <span id="speed">0</span> км/ч</div>
+        <div>🔥 Комбо: <span id="combo">x1</span></div>
+    </div>
+</div>
+
+<div class="help">
+    WASD / стрелки — управление<br>
+    SPACE — ручник
+</div>
+
+<div class="mobile">
+    <div class="pad">
+        <div class="btn" id="left">←</div>
+        <div class="btn" id="right">→</div>
+    </div>
+
+    <div class="pad">
+        <div class="btn brake" id="hand">✋</div>
+        <div class="btn gas" id="gas">▲</div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let W, H;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+const keys = {
+    left:false,
+    right:false,
+    gas:false,
+    brake:false
+};
+
+window.addEventListener("keydown", e => {
+    if (
+        e.key === "ArrowLeft" ||
+        e.key.toLowerCase() === "a"
+    ) keys.left = true;
+
+    if (
+        e.key === "ArrowRight" ||
+        e.key.toLowerCase() === "d"
+    ) keys.right = true;
+
+    if (
+        e.key === "ArrowUp" ||
+        e.key.toLowerCase() === "w"
+    ) keys.gas = true;
+
+    if (
+        e.key === "ArrowDown" ||
+        e.key.toLowerCase() === "s" ||
+        e.code === "Space"
+    ) keys.brake = true;
+});
+
+window.addEventListener("keyup", e => {
+    if (
+        e.key === "ArrowLeft" ||
+        e.key.toLowerCase() === "a"
+    ) keys.left = false;
+
+    if (
+        e.key === "ArrowRight" ||
+        e.key.toLowerCase() === "d"
+    ) keys.right = false;
+
+    if (
+        e.key === "ArrowUp" ||
+        e.key.toLowerCase() === "w"
+    ) keys.gas = false;
+
+    if (
+        e.key === "ArrowDown" ||
+        e.key.toLowerCase() === "s" ||
+        e.code === "Space"
+    ) keys.brake = false;
+});
+
+function button(id, prop) {
+    const b = document.getElementById(id);
+
+    b.addEventListener("pointerdown", e => {
+        e.preventDefault();
+        keys[prop] = true;
+    });
+
+    b.addEventListener("pointerup", e => {
+        e.preventDefault();
+        keys[prop] = false;
+    });
+
+    b.addEventListener("pointercancel", () => {
+        keys[prop] = false;
+    });
+
+    b.addEventListener("pointerleave", () => {
+        keys[prop] = false;
+    });
+}
+
+button("left","left");
+button("right","right");
+button("gas","gas");
+button("hand","brake");
+
+const car = {
+    x: 0,
+    y: 0,
+    angle: 0,
+    speed: 0,
+    vx: 0,
+    vy: 0
+};
+
+let cameraX = 0;
+let cameraY = 0;
+
+let score = 0;
+let combo = 1;
+let driftTime = 0;
+
+const particles = [];
+const skidMarks = [];
+
+function worldToScreen(x,y) {
+    return {
+        x: x - cameraX + W/2,
+        y: y - cameraY + H/2
+    };
+}
+
+/* трасса */
+
+const track = {
+    cx: 0,
+    cy: 0,
+    outer: 850,
+    inner: 440
+};
+
+/* декоративные объекты */
+
+const trees = [];
+
+for(let i=0;i<100;i++) {
+    const a = Math.random()*Math.PI*2;
+    const r = 1000 + Math.random()*1200;
+
+    trees.push({
+        x: Math.cos(a)*r,
+        y: Math.sin(a)*r,
+        size: 20 + Math.random()*25
+    });
+}
+
+/* пыль */
+
+function particle(x,y) {
+    particles.push({
+        x,
+        y,
+        vx:(Math.random()-.5)*2,
+        vy:(Math.random()-.5)*2,
+        life:1,
+        size:4+Math.random()*8
+    });
+}
+
+/* обновление */
+
+function update(dt) {
+
+    let acceleration = 0;
+
+    if(keys.gas) acceleration = 0.22;
+    if(keys.brake) acceleration = -0.15;
+
+    car.speed += acceleration;
+
+    if(!keys.gas && !keys.brake) {
+        car.speed *= 0.985;
+    }
+
+    if(keys.brake) {
+        car.speed *= 0.97;
+    }
+
+    car.speed = Math.max(-4,Math.min(12,car.speed));
+
+    let steer = 0;
+
+    if(keys.left) steer -= 1;
+    if(keys.right) steer += 1;
+
+    const steeringPower =
+        0.035 * Math.min(Math.abs(car.speed)+1,8);
+
+    car.angle += steer * steeringPower;
+
+    /* дрифт */
+
+    const drift = keys.brake && Math.abs(car.speed) > 2;
+
+    let grip = drift ? 0.92 : 0.97;
+
+    const forwardX = Math.cos(car.angle) * car.speed;
+    const forwardY = Math.sin(car.angle) * car.speed;
+
+    car.vx = car.vx * grip + forwardX * (1-grip);
+    car.vy = car.vy * grip + forwardY * (1-grip);
+
+    car.x += car.vx;
+    car.y += car.vy;
+
+    if(drift && Math.abs(steer) > 0 && Math.abs(car.speed) > 3) {
+
+        driftTime += dt;
+
+        score += Math.floor(Math.abs(car.speed) * 0.8);
+
+        if(driftTime > 1000) {
+            combo = Math.min(10, combo + 0.01);
+        }
+
+        for(let i=0;i<2;i++) {
+            const px =
+                car.x -
+                Math.cos(car.angle)*20 +
+                (Math.random()-.5)*15;
+
+            const py =
+                car.y -
+                Math.sin(car.angle)*20 +
+                (Math.random()-.5)*15;
+
+            particle(px,py);
+        }
+
+    } else {
+        driftTime = 0;
+        combo = Math.max(1,combo-0.01);
+    }
+
+    /* частицы */
+
+    for(let i=particles.length-1;i>=0;i--) {
+
+        const p = particles[i];
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.025;
+        p.size += .1;
+
+        if(p.life <= 0)
+            particles.splice(i,1);
+    }
+
+    cameraX += (car.x-cameraX)*0.08;
+    cameraY += (car.y-cameraY)*0.08;
+
+    document.getElementById("score").textContent =
+        Math.floor(score);
+
+    document.getElementById("speed").textContent =
+        Math.floor(Math.abs(car.speed)*18);
+
+    document.getElementById("combo").textContent =
+        "x"+combo.toFixed(1);
+}
+
+/* рисуем мир */
+
+function drawWorld() {
+
+    ctx.fillStyle = "#0b2414";
+    ctx.fillRect(0,0,W,H);
+
+    const center = worldToScreen(track.cx,track.cy);
+
+    /* внешняя траса */
+
+    ctx.beginPath();
+    ctx.arc(center.x,center.y,track.outer,0,Math.PI*2);
+
+    ctx.fillStyle = "#343434";
+    ctx.fill();
+
+    /* трава внутри */
+
+    ctx.beginPath();
+    ctx.arc(center.x,center.y,track.inner,0,Math.PI*2);
+
+    ctx.fillStyle = "#102b18";
+    ctx.fill();
+
+    /* внутренний круг */
+
+    ctx.beginPath();
+    ctx.arc(center.x,center.y,track.inner+15,0,Math.PI*2);
+
+    ctx.strokeStyle = "#eeeeee";
+    ctx.lineWidth = 8;
+    ctx.stroke();
+
+    /* внешняя линия */
+
+    ctx.beginPath();
+    ctx.arc(center.x,center.y,track.outer-15,0,Math.PI*2);
+
+    ctx.strokeStyle = "#eeeeee";
+    ctx.lineWidth = 8;
+    ctx.stroke();
+
+    /* дорожная разметка */
+
+    ctx.beginPath();
+    ctx.arc(center.x,center.y,
+        (track.outer+track.inner)/2,
+        0,Math.PI*2
+    );
+
+    ctx.strokeStyle = "#777";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([30,35]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    /* деревья */
+
+    for(const t of trees) {
+
+        const p = worldToScreen(t.x,t.y);
+
+        if(
+            p.x < -100 ||
+            p.x > W+100 ||
+            p.y < -100 ||
+            p.y > H+100
+        ) continue;
+
+        ctx.fillStyle = "#392719";
+        ctx.fillRect(
+            p.x-5,
+            p.y,
+            10,
+            t.size
+        );
+
+        ctx.beginPath();
+        ctx.arc(
+            p.x,
+            p.y,
+            t.size,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle = "#145b2b";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(
+            p.x-8,
+            p.y-8,
+            t.size*.55,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle = "#1b7936";
+        ctx.fill();
+    }
+}
+
+/* машина */
+
+function drawCar() {
+
+    const p = worldToScreen(car.x,car.y);
+
+    ctx.save();
+
+    ctx.translate(p.x,p.y);
+    ctx.rotate(car.angle);
+
+    /* тень */
+
+    ctx.fillStyle = "rgba(0,0,0,.5)";
+    ctx.beginPath();
+    ctx.roundRect(-27,-15,54,30,8);
+    ctx.fill();
+
+    /* кузов */
+
+    ctx.fillStyle = "#d71920";
+    ctx.beginPath();
+    ctx.roundRect(-25,-13,50,26,7);
+    ctx.fill();
+
+    /* капот */
+
+    ctx.fillStyle = "#ff3038";
+    ctx.fillRect(7,-10,15,20);
+
+    /* стекло */
+
+    ctx.fillStyle = "#111b25";
+    ctx.beginPath();
+    ctx.roundRect(-8,-10,18,20,4);
+    ctx.fill();
+
+    /* заднее стекло */
+
+    ctx.fillStyle = "#202a34";
+    ctx.fillRect(-20,-9,8,18);
+
+    /* фары */
+
+    ctx.fillStyle = "#fff3b0";
+    ctx.fillRect(20,-8,5,6);
+    ctx.fillRect(20,2,5,6);
+
+    /* задние фонари */
+
+    ctx.fillStyle = "#ff1111";
+    ctx.fillRect(-25,-9,4,6);
+    ctx.fillRect(-25,3,4,6);
+
+    /* колёса */
+
+    ctx.fillStyle = "#080808";
+
+    ctx.fillRect(-16,-16,12,6);
+    ctx.fillRect(7,-16,12,6);
+
+    ctx.fillRect(-16,10,12,6);
+    ctx.fillRect(7,10,12,6);
+
+    /* спойлер */
+
+    ctx.fillStyle = "#090909";
+    ctx.fillRect(-28,-15,5,30);
+
+    ctx.restore();
+}
+
+/* частицы */
+
+function drawParticles() {
+
+    for(const p of particles) {
+
+        const s = worldToScreen(p.x,p.y);
+
+        ctx.globalAlpha = p.life;
+
+        ctx.fillStyle = "#bbb";
+
+        ctx.beginPath();
+        ctx.arc(
+            s.x,
+            s.y,
+            p.size,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+}
+
+/* эффект скорости */
+
+function drawSpeedLines() {
+
+    if(Math.abs(car.speed) < 7) return;
+
+    ctx.strokeStyle = "rgba(255,255,255,.08)";
+    ctx.lineWidth = 2;
+
+    for(let i=0;i<15;i++) {
+
+        const x = Math.random()*W;
+        const y = Math.random()*H;
+
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.lineTo(
+            x - Math.cos(car.angle)*50,
+            y - Math.sin(car.angle)*50
+        );
+        ctx.stroke();
+    }
+}
+
+/* цикл */
+
+let last = performance.now();
+
+function loop(now) {
+
+    const dt = Math.min(40,now-last);
+    last = now;
+
+    update(dt);
+
+    drawWorld();
+    drawParticles();
+    drawSpeedLines();
+    drawCar();
+
+    requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
+```
